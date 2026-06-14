@@ -6,7 +6,7 @@ A premium browser userscript that dynamically analyzes the view statistics of al
 
 Click the link below to install the script directly via your userscript manager:
 
-👉 [**Install YouTube View Highlighter**](https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript/raw/main/youtube-view-highlighter.user.js)
+👉 [**Install YouTube View Highlighter**](https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js)
 
 ---
 
@@ -30,7 +30,7 @@ To use this script, you must first install a userscript manager extension in you
 ## Installation
 
 1. Install one of the compatible userscript managers listed above.
-2. Click the [**Install Link**](https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript/raw/main/youtube-view-highlighter.user.js) to open the userscript manager's installation screen.
+2. Click the [**Install Link**](https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js) to open the userscript manager's installation screen.
 3. Click **Install** (or **Confirm installation**).
 4. Navigate to any YouTube page with video lists (e.g. [Harland Highway Podcast Videos](https://www.youtube.com/@HarlandHighwayPodcast/videos)).
 5. The script will activate, and you will see the floating control panel and highlighted video view counts.

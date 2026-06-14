@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         YouTube View Highlighter
-// @namespace    https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript
-// @version      1.7
+// @namespace    https://github.com/MohsenBlur/youtubeviewhighlighter
+// @version      1.8
 // @description  Visibly highlights the view count of the top X% of videos on any YouTube page with an interactive control bar.
-// @author       MohsenBlur
+// @author       Antigravity
 // @match        https://www.youtube.com/*
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
-// @updateURL    https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
-// @supportURL   https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript/issues
+// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js
+// @updateURL    https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js
+// @supportURL   https://github.com/MohsenBlur/youtubeviewhighlighter/issues
 // ==/UserScript==
 
 (function() {
@@ -57,6 +57,13 @@
         if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
             highlightPercentage = parsed;
         }
+    }
+
+    // Collapsed/docked UI state
+    let isCollapsed = false;
+    const savedCollapse = localStorage.getItem('yt-highlighter-collapsed');
+    if (savedCollapse === 'true') {
+        isCollapsed = true;
     }
 
     // Inject styles for premium-looking highlights, flashing text animations, and the floating control bar
@@ -158,7 +165,7 @@
                 color: #0f0f0f !important;
                 gap: 8px !important;
                 user-select: none !important;
-                transition: all 0.3s ease !important;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
             }
 
             html[dark] #yt-highlighter-control,
@@ -167,6 +174,43 @@
                 border: 1px solid rgba(255, 255, 255, 0.1) !important;
                 color: #f1f1f1 !important;
                 box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
+            }
+
+            /* Collapsed State Tab styling (sticks to right side of viewport) */
+            #yt-highlighter-control.yt-collapsed {
+                right: 0px !important;
+                border-radius: 20px 0 0 20px !important;
+                padding: 6px 10px 6px 14px !important;
+                border-right: none !important;
+                cursor: pointer !important;
+                background: rgba(16, 185, 129, 0.12) !important;
+                border-color: rgba(16, 185, 129, 0.3) !important;
+                color: #047857 !important;
+                box-shadow: -2px 4px 10px rgba(16, 185, 129, 0.1) !important;
+            }
+
+            html[dark] #yt-highlighter-control.yt-collapsed,
+            html[theme="dark"] #yt-highlighter-control.yt-collapsed {
+                background: rgba(16, 185, 129, 0.18) !important;
+                border-color: rgba(16, 185, 129, 0.4) !important;
+                color: #34d399 !important;
+                box-shadow: -2px 4px 12px rgba(16, 185, 129, 0.2) !important;
+            }
+
+            #yt-highlighter-control.yt-collapsed:hover {
+                background: rgba(16, 185, 129, 0.2) !important;
+                transform: translateX(-4px);
+            }
+
+            html[dark] #yt-highlighter-control.yt-collapsed:hover,
+            html[theme="dark"] #yt-highlighter-control.yt-collapsed:hover {
+                background: rgba(16, 185, 129, 0.3) !important;
+            }
+
+            .yt-collapsed-text {
+                font-weight: 700 !important;
+                font-size: 13px !important;
+                letter-spacing: 0.5px !important;
             }
 
             .yt-control-btn {
@@ -228,6 +272,44 @@
                 font-weight: 700 !important;
                 margin-left: -2px !important;
             }
+
+            .yt-control-divider {
+                width: 1px !important;
+                height: 16px !important;
+                background-color: rgba(0, 0, 0, 0.08) !important;
+                margin: 0 2px !important;
+            }
+
+            html[dark] .yt-control-divider,
+            html[theme="dark"] .yt-control-divider {
+                background-color: rgba(255, 255, 255, 0.15) !important;
+            }
+
+            .yt-collapse-btn {
+                background: transparent !important;
+                border: none !important;
+                color: inherit !important;
+                font-size: 18px !important;
+                font-weight: 500 !important;
+                cursor: pointer !important;
+                width: 20px !important;
+                height: 20px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                border-radius: 4px !important;
+                transition: background-color 0.2s ease !important;
+                outline: none !important;
+            }
+
+            .yt-collapse-btn:hover {
+                background-color: rgba(0, 0, 0, 0.06) !important;
+            }
+
+            html[dark] .yt-collapse-btn:hover,
+            html[theme="dark"] .yt-collapse-btn:hover {
+                background-color: rgba(255, 255, 255, 0.1) !important;
+            }
         `;
         (document.head || document.documentElement).appendChild(style);
     }
@@ -235,68 +317,107 @@
     // Create and attach the floating controls to the DOM (TrustedHTML compliant)
     function createControlPanel() {
         if (document.getElementById('yt-highlighter-control')) {
-            const input = document.getElementById('yt-highlighter-input');
-            if (input && parseInt(input.value, 10) !== highlightPercentage) {
-                input.value = highlightPercentage;
-            }
+            updateControlPanelUI();
             return;
         }
 
         const control = document.createElement('div');
         control.id = 'yt-highlighter-control';
-
-        const decBtn = document.createElement('button');
-        decBtn.id = 'yt-highlighter-dec';
-        decBtn.className = 'yt-control-btn';
-        decBtn.textContent = '−';
-
-        const inputEl = document.createElement('input');
-        inputEl.type = 'number';
-        inputEl.id = 'yt-highlighter-input';
-        inputEl.className = 'yt-control-input';
-        inputEl.value = highlightPercentage;
-        inputEl.min = '1';
-        inputEl.max = '100';
-
-        const percentSpan = document.createElement('span');
-        percentSpan.className = 'yt-control-percent';
-        percentSpan.textContent = '%';
-
-        const incBtn = document.createElement('button');
-        incBtn.id = 'yt-highlighter-inc';
-        incBtn.className = 'yt-control-btn';
-        incBtn.textContent = '+';
-
-        control.appendChild(decBtn);
-        control.appendChild(inputEl);
-        control.appendChild(percentSpan);
-        control.appendChild(incBtn);
-
         document.body.appendChild(control);
 
-        // Bind interactive controls
-        decBtn.addEventListener('click', () => {
-            updatePercentage(highlightPercentage - 5);
-        });
+        updateControlPanelUI();
+    }
 
-        incBtn.addEventListener('click', () => {
-            updatePercentage(highlightPercentage + 5);
-        });
+    // Update the layout inside the control panel wrapper based on collapsed/expanded state
+    function updateControlPanelUI() {
+        const control = document.getElementById('yt-highlighter-control');
+        if (!control) return;
 
-        inputEl.addEventListener('input', () => {
-            let val = parseInt(inputEl.value, 10);
-            if (!isNaN(val)) {
-                if (val < 1) val = 1;
-                if (val > 100) val = 100;
-                highlightPercentage = val;
-                localStorage.setItem('yt-highlighter-percentage', highlightPercentage);
-                debouncedHighlight();
-            }
-        });
+        // Clear existing nodes safely (TrustedHTML compliant)
+        while (control.firstChild) {
+            control.removeChild(control.firstChild);
+        }
 
-        inputEl.addEventListener('blur', () => {
+        if (isCollapsed) {
+            control.classList.add('yt-collapsed');
+            
+            const tabText = document.createElement('span');
+            tabText.className = 'yt-collapsed-text';
+            tabText.textContent = `‹ ${highlightPercentage}%`;
+            control.appendChild(tabText);
+
+            // Expand when clicking anywhere on the collapsed tab
+            control.onclick = () => {
+                isCollapsed = false;
+                localStorage.setItem('yt-highlighter-collapsed', 'false');
+                updateControlPanelUI();
+            };
+        } else {
+            control.classList.remove('yt-collapsed');
+            control.onclick = null;
+
+            const decBtn = document.createElement('button');
+            decBtn.className = 'yt-control-btn';
+            decBtn.textContent = '−';
+            decBtn.onclick = (e) => {
+                e.stopPropagation();
+                updatePercentage(highlightPercentage - 5);
+            };
+
+            const inputEl = document.createElement('input');
+            inputEl.type = 'number';
+            inputEl.id = 'yt-highlighter-input';
+            inputEl.className = 'yt-control-input';
             inputEl.value = highlightPercentage;
-        });
+            inputEl.min = '1';
+            inputEl.max = '100';
+            inputEl.onclick = (e) => e.stopPropagation();
+            inputEl.oninput = (e) => {
+                let val = parseInt(inputEl.value, 10);
+                if (!isNaN(val)) {
+                    if (val < 1) val = 1;
+                    if (val > 100) val = 100;
+                    highlightPercentage = val;
+                    localStorage.setItem('yt-highlighter-percentage', highlightPercentage);
+                    debouncedHighlight();
+                }
+            };
+            inputEl.onblur = () => {
+                inputEl.value = highlightPercentage;
+            };
+
+            const percentSpan = document.createElement('span');
+            percentSpan.className = 'yt-control-percent';
+            percentSpan.textContent = '%';
+
+            const incBtn = document.createElement('button');
+            incBtn.className = 'yt-control-btn';
+            incBtn.textContent = '+';
+            incBtn.onclick = (e) => {
+                e.stopPropagation();
+                updatePercentage(highlightPercentage + 5);
+            };
+
+            const divider = document.createElement('span');
+            divider.className = 'yt-control-divider';
+
+            const collapseBtn = document.createElement('button');
+            collapseBtn.className = 'yt-collapse-btn';
+            collapseBtn.textContent = '›';
+            collapseBtn.onclick = (e) => {
+                e.stopPropagation();
+                isCollapsed = true;
+                localStorage.setItem('yt-highlighter-collapsed', 'true');
+                updateControlPanelUI();
+            };
+
+            control.appendChild(decBtn);
+            control.appendChild(inputEl);
+            control.appendChild(percentSpan);
+            control.appendChild(incBtn);
+            control.appendChild(divider);
+            control.appendChild(collapseBtn);
+        }
     }
 
     // Update state, DOM and trigger re-highlighting
@@ -310,6 +431,12 @@
         const inputEl = document.getElementById('yt-highlighter-input');
         if (inputEl) {
             inputEl.value = highlightPercentage;
+        }
+        
+        // If collapsed, update the tab label text
+        const tabText = document.querySelector('.yt-collapsed-text');
+        if (tabText) {
+            tabText.textContent = `‹ ${highlightPercentage}%`;
         }
         
         runHighlighting();
