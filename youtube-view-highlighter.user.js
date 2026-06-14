@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         YouTube View Highlighter
-// @namespace    https://github.com/MohsenBlur/youtubeviewhighlighter
-// @version      1.8
+// @namespace    https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript
+// @version      1.9
 // @description  Visibly highlights the view count of the top X% of videos on any YouTube page with an interactive control bar.
 // @author       Antigravity
 // @match        https://www.youtube.com/*
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js
-// @updateURL    https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/refs/heads/main/youtube-view-highlighter.user.js
-// @supportURL   https://github.com/MohsenBlur/youtubeviewhighlighter/issues
+// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
+// @updateURL    https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
+// @supportURL   https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript/issues
 // ==/UserScript==
 
 (function() {
@@ -316,12 +316,16 @@
 
     // Create and attach the floating controls to the DOM (TrustedHTML compliant)
     function createControlPanel() {
-        if (document.getElementById('yt-highlighter-control')) {
-            updateControlPanelUI();
-            return;
+        let control = document.getElementById('yt-highlighter-control');
+        if (control) {
+            // Re-append to body if somehow detached during dynamic SPA re-renders
+            if (control.parentNode !== document.body) {
+                document.body.appendChild(control);
+            }
+            return; // Already exists, do not clear and recreate children
         }
 
-        const control = document.createElement('div');
+        control = document.createElement('div');
         control.id = 'yt-highlighter-control';
         document.body.appendChild(control);
 
@@ -470,8 +474,8 @@
             return parseFloat(str) || 0;
         }
 
-        const parts = str.split(separator);
-        const lastPart = parts[1];
+        const MathParts = str.split(separator);
+        const lastPart = MathParts[1];
 
         // If the fractional/decimal part has exactly 3 digits, treat it as a thousands separator
         if (lastPart.length === 3) {
