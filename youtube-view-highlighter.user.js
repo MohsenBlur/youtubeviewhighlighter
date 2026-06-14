@@ -1,15 +1,15 @@
 // ==UserScript==
 // @name         YouTube View Highlighter
-// @namespace    https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript
-// @version      1.9
+// @namespace    https://github.com/MohsenBlur/youtubeviewhighlighter
+// @version      2.0
 // @description  Visibly highlights the view count of the top X% of videos on any YouTube page with an interactive control bar.
 // @author       Antigravity
 // @match        https://www.youtube.com/*
 // @grant        none
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
-// @updateURL    https://raw.githubusercontent.com/MohsenBlur/YouTube-View-Highlighter-Userscript/main/youtube-view-highlighter.user.js
-// @supportURL   https://github.com/MohsenBlur/YouTube-View-Highlighter-Userscript/issues
+// @downloadURL  https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/main/youtube-view-highlighter.user.js
+// @updateURL    https://raw.githubusercontent.com/MohsenBlur/youtubeviewhighlighter/main/youtube-view-highlighter.user.js
+// @supportURL   https://github.com/MohsenBlur/youtubeviewhighlighter/issues
 // ==/UserScript==
 
 (function() {
@@ -64,6 +64,20 @@
     const savedCollapse = localStorage.getItem('yt-highlighter-collapsed');
     if (savedCollapse === 'true') {
         isCollapsed = true;
+    }
+
+    // Dock side state ('left' or 'right', default 'right')
+    let dockSide = 'right';
+    const savedDockSide = localStorage.getItem('yt-highlighter-dock-side');
+    if (savedDockSide === 'left' || savedDockSide === 'right') {
+        dockSide = savedDockSide;
+    }
+
+    // Dock vertical position state (default '72px')
+    let dockTop = '72px';
+    const savedDockTop = localStorage.getItem('yt-highlighter-dock-top');
+    if (savedDockTop) {
+        dockTop = savedDockTop;
     }
 
     // Inject styles for premium-looking highlights, flashing text animations, and the floating control bar
@@ -147,8 +161,6 @@
             /* Floating Control Panel Section styling */
             #yt-highlighter-control {
                 position: fixed !important;
-                top: 72px !important;
-                right: 24px !important;
                 z-index: 10000 !important;
                 display: flex !important;
                 align-items: center !important;
@@ -176,17 +188,37 @@
                 box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4) !important;
             }
 
-            /* Collapsed State Tab styling (sticks to right side of viewport) */
+            /* Disable transition and cursor change while dragging */
+            #yt-highlighter-control.yt-dragging {
+                transition: none !important;
+                cursor: grabbing !important;
+            }
+
+            /* Base Collapsed State Tab styling */
             #yt-highlighter-control.yt-collapsed {
-                right: 0px !important;
-                border-radius: 20px 0 0 20px !important;
-                padding: 6px 10px 6px 14px !important;
-                border-right: none !important;
                 cursor: pointer !important;
                 background: rgba(16, 185, 129, 0.12) !important;
                 border-color: rgba(16, 185, 129, 0.3) !important;
                 color: #047857 !important;
+                padding: 6px 14px !important;
+            }
+
+            #yt-highlighter-control.yt-collapsed.yt-dock-right {
+                right: 0px !important;
+                left: auto !important;
+                border-radius: 20px 0 0 20px !important;
+                border-right: none !important;
+                padding: 6px 10px 6px 14px !important;
                 box-shadow: -2px 4px 10px rgba(16, 185, 129, 0.1) !important;
+            }
+
+            #yt-highlighter-control.yt-collapsed.yt-dock-left {
+                left: 0px !important;
+                right: auto !important;
+                border-radius: 0 20px 20px 0 !important;
+                border-left: none !important;
+                padding: 6px 14px 6px 10px !important;
+                box-shadow: 2px 4px 10px rgba(16, 185, 129, 0.1) !important;
             }
 
             html[dark] #yt-highlighter-control.yt-collapsed,
@@ -197,14 +229,41 @@
                 box-shadow: -2px 4px 12px rgba(16, 185, 129, 0.2) !important;
             }
 
-            #yt-highlighter-control.yt-collapsed:hover {
+            #yt-highlighter-control.yt-collapsed.yt-dock-right:hover {
                 background: rgba(16, 185, 129, 0.2) !important;
-                transform: translateX(-4px);
+                transform: translateX(-4px) !important;
+            }
+
+            #yt-highlighter-control.yt-collapsed.yt-dock-left:hover {
+                background: rgba(16, 185, 129, 0.2) !important;
+                transform: translateX(4px) !important;
             }
 
             html[dark] #yt-highlighter-control.yt-collapsed:hover,
             html[theme="dark"] #yt-highlighter-control.yt-collapsed:hover {
                 background: rgba(16, 185, 129, 0.3) !important;
+            }
+
+            /* Drag handle styling */
+            .yt-drag-handle {
+                cursor: grab !important;
+                color: rgba(0, 0, 0, 0.3) !important;
+                font-size: 14px !important;
+                font-weight: 900 !important;
+                user-select: none !important;
+                padding: 0 4px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+
+            html[dark] .yt-drag-handle,
+            html[theme="dark"] .yt-drag-handle {
+                color: rgba(255, 255, 255, 0.4) !important;
+            }
+
+            .yt-drag-handle:active {
+                cursor: grabbing !important;
             }
 
             .yt-collapsed-text {
@@ -322,6 +381,7 @@
             if (control.parentNode !== document.body) {
                 document.body.appendChild(control);
             }
+            applyDockedPosition();
             return; // Already exists, do not clear and recreate children
         }
 
@@ -347,7 +407,11 @@
             
             const tabText = document.createElement('span');
             tabText.className = 'yt-collapsed-text';
-            tabText.textContent = `‹ ${highlightPercentage}%`;
+            if (dockSide === 'left') {
+                tabText.textContent = `${highlightPercentage}% ›`;
+            } else {
+                tabText.textContent = `‹ ${highlightPercentage}%`;
+            }
             control.appendChild(tabText);
 
             // Expand when clicking anywhere on the collapsed tab
@@ -359,6 +423,12 @@
         } else {
             control.classList.remove('yt-collapsed');
             control.onclick = null;
+
+            // Drag handle
+            const dragHandle = document.createElement('span');
+            dragHandle.className = 'yt-drag-handle';
+            dragHandle.textContent = '⋮⋮';
+            control.appendChild(dragHandle);
 
             const decBtn = document.createElement('button');
             decBtn.className = 'yt-control-btn';
@@ -407,7 +477,7 @@
 
             const collapseBtn = document.createElement('button');
             collapseBtn.className = 'yt-collapse-btn';
-            collapseBtn.textContent = '›';
+            collapseBtn.textContent = dockSide === 'left' ? '‹' : '›';
             collapseBtn.onclick = (e) => {
                 e.stopPropagation();
                 isCollapsed = true;
@@ -421,6 +491,137 @@
             control.appendChild(incBtn);
             control.appendChild(divider);
             control.appendChild(collapseBtn);
+
+            setupDraggability(control, dragHandle);
+        }
+
+        applyDockedPosition();
+    }
+
+    // Set up dragging logic for the control panel using the handle
+    function setupDraggability(control, dragHandle) {
+        let isDragging = false;
+        let startX, startY;
+        let initialLeft, initialTop;
+
+        dragHandle.addEventListener('mousedown', dragStart);
+        dragHandle.addEventListener('touchstart', dragStart, { passive: false });
+
+        function dragStart(e) {
+            if (e.type === 'mousedown' && e.button !== 0) return;
+            
+            isDragging = true;
+            control.classList.add('yt-dragging');
+
+            const rect = control.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+            
+            startX = clientX;
+            startY = clientY;
+
+            document.addEventListener('mousemove', dragMove, { passive: false });
+            document.addEventListener('mouseup', dragEnd);
+            document.addEventListener('touchmove', dragMove, { passive: false });
+            document.addEventListener('touchend', dragEnd);
+
+            e.preventDefault();
+        }
+
+        function dragMove(e) {
+            if (!isDragging) return;
+            
+            const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
+
+            const width = control.offsetWidth;
+            const height = control.offsetHeight;
+
+            if (newLeft < 10) newLeft = 10;
+            if (newLeft + width > window.innerWidth - 10) {
+                newLeft = window.innerWidth - width - 10;
+            }
+            if (newTop < 10) newTop = 10;
+            if (newTop + height > window.innerHeight - 10) {
+                newTop = window.innerHeight - height - 10;
+            }
+
+            control.style.setProperty('left', `${newLeft}px`, 'important');
+            control.style.setProperty('right', 'auto', 'important');
+            control.style.setProperty('top', `${newTop}px`, 'important');
+            
+            e.preventDefault();
+        }
+
+        function dragEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            control.classList.remove('yt-dragging');
+
+            document.removeEventListener('mousemove', dragMove);
+            document.removeEventListener('mouseup', dragEnd);
+            document.removeEventListener('touchmove', dragMove);
+            document.removeEventListener('touchend', dragEnd);
+
+            const rect = control.getBoundingClientRect();
+            const panelCenterX = rect.left + rect.width / 2;
+            const windowCenterX = window.innerWidth / 2;
+
+            if (panelCenterX < windowCenterX) {
+                dockSide = 'left';
+            } else {
+                dockSide = 'right';
+            }
+
+            const topPct = (rect.top / window.innerHeight) * 100;
+            const boundedTopPct = Math.max(5, Math.min(95, topPct));
+            dockTop = `${boundedTopPct}%`;
+
+            localStorage.setItem('yt-highlighter-dock-side', dockSide);
+            localStorage.setItem('yt-highlighter-dock-top', dockTop);
+
+            applyDockedPosition();
+        }
+    }
+
+    // Apply the docking CSS classes and positioning rules dynamically
+    function applyDockedPosition() {
+        const control = document.getElementById('yt-highlighter-control');
+        if (!control) return;
+
+        if (dockSide === 'left') {
+            control.classList.add('yt-dock-left');
+            control.classList.remove('yt-dock-right');
+            
+            control.style.setProperty('top', dockTop, 'important');
+            if (isCollapsed) {
+                control.style.setProperty('left', '0px', 'important');
+                control.style.setProperty('right', 'auto', 'important');
+            } else {
+                control.style.setProperty('left', '24px', 'important');
+                control.style.setProperty('right', 'auto', 'important');
+            }
+        } else {
+            control.classList.add('yt-dock-right');
+            control.classList.remove('yt-dock-left');
+
+            control.style.setProperty('top', dockTop, 'important');
+            if (isCollapsed) {
+                control.style.setProperty('right', '0px', 'important');
+                control.style.setProperty('left', 'auto', 'important');
+            } else {
+                control.style.setProperty('right', '24px', 'important');
+                control.style.setProperty('left', 'auto', 'important');
+            }
         }
     }
 
@@ -437,10 +638,13 @@
             inputEl.value = highlightPercentage;
         }
         
-        // If collapsed, update the tab label text
         const tabText = document.querySelector('.yt-collapsed-text');
         if (tabText) {
-            tabText.textContent = `‹ ${highlightPercentage}%`;
+            if (dockSide === 'left') {
+                tabText.textContent = `${highlightPercentage}% ›`;
+            } else {
+                tabText.textContent = `‹ ${highlightPercentage}%`;
+            }
         }
         
         runHighlighting();
